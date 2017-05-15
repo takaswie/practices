@@ -1,119 +1,143 @@
+/*
+ * enumerate-devices.c
+ *
+ * Copyright (c) 2017 Takashi Sakamoto
+ *
+ * Licensed under the terms of the GNU General Public License, version 3.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 
 #include <libudev.h>
 
-static void dump_tags(struct udev_device *dev)
-{
-    struct udev_list_entry *entry, *entries;
+#include <string.h>
+#include <errno.h>
 
-    entries = udev_device_get_tags_list_entry(dev);
+static void dump_entries(struct udev_device *dev,
+                         struct udev_list_entry *entries,
+                         const char *const type)
+{
+    struct udev_list_entry *entry;
+    const char *name;
+    const char *value;
 
     udev_list_entry_foreach(entry, entries) {
-        const char *name = udev_list_entry_get_name(entry);
-        printf("    = %s\n", name);
+        name = udev_list_entry_get_name(entry);
+
+        if (type != NULL) {
+            if (strcmp(type, "prop") == 0)
+                value = udev_device_get_property_value(dev, name);
+            else if (strcmp(type, "sysattr") == 0)
+                value = udev_device_get_sysattr_value(dev, name);
+        } else {
+            value = udev_list_entry_get_value(entry);
+        }
+
+        if (value == NULL)
+            printf("    %s\n", name);
+        else
+            printf("    %s: %s\n", name, value);
     }
 }
 
-static void dump_sysattrs(struct udev_device *dev)
+static void dump_properties(struct udev *ctx, const char *const syspath)
 {
-    struct udev_list_entry *entry, *entries;
+    struct udev_device *dev;
+    struct udev_list_entry *entries;
 
-    entries = udev_device_get_sysattr_list_entry(dev);
+    dev = udev_device_new_from_syspath(ctx, syspath);
+    printf("  %s\n", udev_device_get_devpath(dev));
+    printf("  %s\n", udev_device_get_subsystem(dev));
+    printf("  %s\n", udev_device_get_devtype(dev));
+    printf("  %s\n", udev_device_get_syspath(dev));
+    printf("  %s\n", udev_device_get_sysname(dev));
+    printf("  %s\n", udev_device_get_sysnum(dev));
+    printf("  %s\n", udev_device_get_devnode(dev));
+    printf("  %d\n", udev_device_get_is_initialized(dev));
 
-    udev_list_entry_foreach(entry, entries) {
-        const char *name = udev_list_entry_get_name(entry);
-        printf("    * %s: %s\n", name, udev_device_get_sysattr_value(dev, name));
+    entries = udev_device_get_devlinks_list_entry(dev);
+    if (entries != NULL) {
+        printf("  devlinks:\n");
+        dump_entries(dev, entries, NULL);
     }
-}
-
-static void dump_props(struct udev_device *dev)
-{
-    struct udev_list_entry *entry, *entries;
 
     entries = udev_device_get_properties_list_entry(dev);
+    if (entries != NULL) {
+        printf("  properties:\n");
+        dump_entries(dev, entries, "prop");
+    }
 
-    udev_list_entry_foreach(entry, entries) {
-        const char *name = udev_list_entry_get_name(entry);
-        printf("    - %s: %s\n", name, udev_device_get_property_value(dev, name));
+    entries = udev_device_get_tags_list_entry(dev);
+    if (entries != NULL) {
+        printf("  tags:\n");
+        dump_entries(dev, entries, NULL);
+    }
+
+    entries = udev_device_get_sysattr_list_entry(dev);
+    if (entries != NULL) {
+        printf("  sysattr:\n");
+        dump_entries(dev, entries, "sysattr");
     }
 }
 
-int main(int argc, const char *argv[])
+static void enumerate_device(struct udev *ctx, const char *const subsystem)
+{
+    struct udev_enumerate *enumerator;
+    struct udev_list_entry *entry, *entries;
+    const char *name;
+    const char *value;
+    int err;
+
+    enumerator = udev_enumerate_new(ctx);
+
+    if (udev_enumerate_add_match_subsystem(enumerator, subsystem) < 0) {
+        printf("udev_enumerate_add_match_subsystem(3): %s\n", strerror(ENXIO));
+        return;
+    }
+
+    err = udev_enumerate_scan_devices(enumerator);
+    if (err < 0) {
+        printf("udev_enumerate_scan_devices(3): %s\n", strerror(err));
+        return;
+    }
+
+    entries = udev_enumerate_get_list_entry(enumerator);
+    if (entries == NULL) {
+        printf("udev_enumerate_get_list_entry(3): %s\n", strerror(ENOMEM));
+        return;
+    }
+
+    udev_list_entry_foreach(entry, entries) {
+        name = udev_list_entry_get_name(entry);
+        if (name == NULL)
+                continue;
+        printf("%s\n", name);
+        dump_properties(ctx, name);
+        printf("\n");
+    }
+
+    udev_enumerate_unref(enumerator);
+}
+
+int main(int argc, const char *const argv[])
 {
     struct udev *ctx;
+    struct udev_device *dev;
+    const char *subsystem;
+
+    if (argc == 1)
+        subsystem = NULL;
+    else
+        subsystem = argv[1];
 
     ctx = udev_new();
-    if (ctx == NULL)
+    if (ctx == NULL) {
+        printf("udev_new(3): %s\n", strerror(ENOMEM));
         return EXIT_FAILURE;
-
-    struct udev_enumerate *iter;
-    iter = udev_enumerate_new(ctx);
-    if (iter == NULL)
-        goto end;
-
-    udev_enumerate_add_match_subsystem(iter, "sound");
-    udev_enumerate_scan_devices(iter);
-
-    struct udev_list_entry *entry, *entries;
-    entries = udev_enumerate_get_list_entry(iter);
-    udev_list_entry_foreach(entry, entries) {
-        const char *syspath;
-        struct udev_device *dev;
-        syspath = udev_list_entry_get_name(entry);
-        dev = udev_device_new_from_syspath(ctx, syspath);
-        printf("%s\n", syspath);
-
-        struct udev_device *parent;
-        parent = udev_device_get_parent(dev);
-
-        syspath = udev_device_get_syspath(parent);
-        if (syspath == NULL)
-            continue;
-        printf("  %s\n", syspath);
-
-        parent = udev_device_get_parent_with_subsystem_devtype(dev, "firewire", NULL);
-        syspath = udev_device_get_syspath(parent);
-        if (syspath == NULL)
-            continue;
-        printf("  %s %s\n", syspath, udev_device_get_sysname(parent));
-        dump_tags(parent);
-        dump_props(parent);
-        dump_sysattrs(parent);
-        /*
-        printf("%s %s %s %s %s %s %s\n",
-        udev_device_get_devpath(parent),
-        udev_device_get_subsystem(parent),
-        udev_device_get_devtype(parent),
-        udev_device_get_syspath(parent),
-        udev_device_get_sysname(parent),
-        udev_device_get_sysnum(parent),
-        udev_device_get_devnode(parent)
-        );
-        */
-
-
-        parent = udev_device_get_parent_with_subsystem_devtype(parent, "firewire", NULL);
-        syspath = udev_device_get_syspath(parent);
-        if (syspath == NULL)
-            continue;
-        printf("  %s %s\n", syspath, udev_device_get_sysname(parent));
-        dump_tags(parent);
-        dump_props(parent);
-        dump_sysattrs(parent);
-        /*
-        printf("%s %s %s %s %s %s %s\n",
-        udev_device_get_devpath(parent),
-        udev_device_get_subsystem(parent),
-        udev_device_get_devtype(parent),
-        udev_device_get_syspath(parent),
-        udev_device_get_sysname(parent),
-        udev_device_get_sysnum(parent),
-        udev_device_get_devnode(parent)
-        );
-        */
     }
-end:
-    udev_unref(ctx);
+
+    enumerate_device(ctx, subsystem);
+
     return EXIT_SUCCESS;
 }

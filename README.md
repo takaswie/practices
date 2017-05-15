@@ -19,3 +19,7 @@
     * [Example 3.7](https://developer.gnome.org/clutter-cookbook/stable/events-buttons.html#events-buttons-example-2)
  * clutter/button-pointer-event.py
     * [Example 3.8](https://developer.gnome.org/clutter-cookbook/stable/events-buttons.html#events-buttons-example-3)
+
+## Enumerate in sysfs with libudev
+
+ * udev/enumerate-devices.c

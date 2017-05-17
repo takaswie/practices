@@ -13,6 +13,8 @@
 
 ### Inspired by documents of clutter
 
+ * clutter/bin-layout.py
+    * [Example 7.1](https://developer.gnome.org/clutter-cookbook/stable/layouts-stacking.html#idm140200506996128)
  * clutter/button-event.py
     * [Example 3.6](https://developer.gnome.org/clutter-cookbook/stable/events-buttons.html#events-buttons-example-1)
  * clutter/click-action.py

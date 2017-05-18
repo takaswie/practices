@@ -25,3 +25,4 @@
 ## Enumerate in sysfs with libudev
 
  * udev/enumerate-devices.c
+ * udev/listen-events.c

@@ -30,8 +30,8 @@ if [ -z "${version}" ] ; then
     echo "illegal format of release version: ${version}"
     exit 1
 fi
-prefix="hinawa-utils-${version}/"
-filename="hinawa-utils-${version}.tar.xz"
+prefix="${PACKAGENAME}-${version}/"
+filename="${PACKAGENAME}-${version}.tar.xz"
 ascname="${filename}.asc"
 
 if [ -e "${filename}" ] ; then

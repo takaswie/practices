@@ -48,7 +48,8 @@ if tar tvf "${filename}" | grep -q "^${prefix}" ; then
     exit 1
 fi
 
-gpg --local-user 0xB5A586C7D66FD341 --armor --detach-sign "${filename}"
+fingerprint=$(git config user.signingkey)
+gpg --local-user "${fingerprint}" --armor --detach-sign "${filename}"
 gpg --verify "${ascname}" "${filename}"
 
 if [ $# -gt 1 ] ; then
